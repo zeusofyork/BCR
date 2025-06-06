@@ -1,0 +1,55 @@
+name: Build BCR Magisk Module
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+
+    - name: Configure with CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake ..
+
+    - name: Build native binary
+      run: |
+        cd build
+        make
+
+    - name: Copy compiled binary to module
+      run: |
+        mkdir -p BCR/system/bin
+        cp build/bcr BCR/system/bin/bcr
+        chmod +x BCR/system/bin/bcr
+
+    - name: Get module version from module.prop
+      id: version
+      run: |
+        VERSION=$(grep "^version=" BCR/module.prop | cut -d= -f2)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create Magisk module ZIP
+      run: |
+        cd BCR
+        zip -r "../BCR-${{ steps.version.outputs.version }}.zip" . -x ".git/*"
+
+    - name: Upload ZIP artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: BCR-${{ steps.version.outputs.version }}.zip
+        path: BCR-${{ steps.version.outputs.version }}.zip
