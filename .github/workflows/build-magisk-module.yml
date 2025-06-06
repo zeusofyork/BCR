@@ -1,0 +1,55 @@
+name: Build Magisk Module
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Package Magisk Module
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set version from module.prop
+      id: version
+      run: |
+        VERSION=$(grep "^version=" module.prop | cut -d= -f2)
+        echo "Module version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Set release filename
+      id: filename
+      run: |
+        NAME="BCR"
+        VERSION="${{ steps.version.outputs.version }}"
+        OUTFILE="${NAME}-${VERSION}.zip"
+        echo "filename=$OUTFILE" >> $GITHUB_OUTPUT
+
+    - name: Package Magisk Module
+      run: |
+        mkdir -p out
+        OUTFILE="${{ steps.filename.outputs.filename }}"
+        cd $GITHUB_WORKSPACE
+        zip -r "out/$OUTFILE" . -x ".git/*" ".github/*" "out/*" "*.zip"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.filename.outputs.filename }}
+        path: out/${{ steps.filename.outputs.filename }}
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: BCR v${{ steps.version.outputs.version }}
+        files: out/${{ steps.filename.outputs.filename }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
